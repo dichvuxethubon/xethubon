@@ -1,17 +1,18 @@
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Chỉ chấp nhận phương thức POST' });
+        return res.status(405).json({ message: 'Method Not Allowed' });
     }
 
-    const { text } = req.body;
-    // Vercel sẽ tự lấy 2 giá trị này từ phần "Environment Variables" bạn vừa thêm
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_GROUP_ID;
-
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
     try {
-        const response = await fetch(url, {
+        const { text } = req.body;
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        const chatId = process.env.TELEGRAM_GROUP_ID;
+
+        if (!token || !chatId) {
+            return res.status(500).json({ error: 'Thiếu cấu hình biến môi trường trên Vercel' });
+        }
+
+        const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
