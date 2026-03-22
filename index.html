@@ -607,68 +607,182 @@ sortedDocs.forEach(docSnap => {
             }
         }
 
-        window.createBooking = async () => {
-    const n = document.getElementById('cust-name').value;
-    const ph = document.getElementById('cust-phone').value.trim(); // Lấy SĐT và xóa khoảng trắng
-    const pk = document.getElementById('cust-pickup').value;
-    const ds = document.getElementById('cust-dest').value;
-    const isP = document.getElementById('is-prebook').checked;
-    const pDate = document.getElementById('prebook-date').value;
-    const pTime = document.getElementById('prebook-time').value;
-
-    // 1. Kiểm tra nhập liệu cơ bản
-    if(!n || !ph || !pk) return showToast("Vui lòng nhập đủ tên, SĐT và điểm đón!", "error");
-    if(isP && (!pDate || !pTime)) return showToast("Vui lòng chọn ngày và giờ đặt trước!", "error");
+	window.createBooking = async () => {
+    // 1. TÌM NÚT VÀ KHÓA TỨC THÌ (CHỐNG NHẤP LIÊN TỤC)
+    const btn = document.activeElement;
+    const originalText = btn ? btn.innerText : "Xác nhận gọi xe";
+    
+    if (btn && btn.tagName === 'BUTTON') {
+        btn.disabled = true;
+        btn.innerText = "ĐANG XỬ LÝ...";
+        btn.style.backgroundColor = "#ccc";
+        btn.style.cursor = "not-allowed";
+    }
 
     try {
-        // 2. LOGIC KIỂM TRA: Tìm xem SĐT này có chuyến nào chưa hoàn thành không
-        // Chuyến chưa hoàn thành là chuyến KHÔNG có trạng thái 'completed' và KHÔNG phải 'cancelled'
-        const q = query(
+        // 2. LẤY DỮ LIỆU TỪ FORM
+        const n = document.getElementById('cust-name').value.trim();
+        const ph = document.getElementById('cust-phone').value.trim();
+        const pk = document.getElementById('cust-pickup').value.trim();
+        const ds = document.getElementById('cust-dest').value.trim();
+        const isP = document.getElementById('is-prebook').checked;
+        const pDate = document.getElementById('prebook-date').value;
+        const pTime = document.getElementById('prebook-time').value;
+
+        // 3. TẠO ID THIẾT BỊ & LẤY IP
+        const deviceId = btoa(navigator.userAgent + screen.width + navigator.language).substring(0, 25);
+        let userIP = "Unknown";
+        try {
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+            userIP = ipData.ip;
+        } catch (e) {}
+
+        // 4. KIỂM TRA FORM TRỐNG & ĐỊNH DẠNG SĐT
+        const vnf_regex = /^(03|05|07|08|09)[0-9]{8}$/; 
+
+	// ❌ Thiếu thông tin
+	if (!n || !ph || !pk) {
+   	 showToast("Vui lòng nhập Tên, SĐT và Điểm đón!", "error");
+    	resetButton(btn, originalText);
+    	return;
+	}
+
+	// ❌ Sai định dạng SĐT
+	if (!vnf_regex.test(ph)) {
+   	 showToast("SĐT này không phải của bạn!", "error");
+    	resetButton(btn, originalText);
+    	return;
+	}
+	if (isP && (!pDate || !pTime)) {
+   	 showToast("Vui lòng chọn ngày và giờ để đặt trước!", "error");
+    	resetButton(btn, originalText);
+    	return;
+	}
+	
+
+	
+        // 5. [LOGIC 1] CHẶN SĐT ĐANG CÓ ĐƠN CHƯA HOÀN THÀNH
+        const qCheckPhone = query(
             collection(db, 'artifacts', appId, 'public', 'data', 'bookings'),
-            where("phone", "==", ph)
+            where('phone', '==', ph),
+            where('status', 'in', ['pending', 'accepted'])
         );
-        
-        const querySnapshot = await getDocs(q);
-        let hasActiveBooking = false;
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            // Nếu có chuyến đang 'pending' hoặc 'accepted' thì coi là chưa xong
-            if (data.status === 'pending' || data.status === 'accepted') {
-                hasActiveBooking = true;
-            }
-        });
-
-        if (hasActiveBooking) {
-            alert("Bạn đang có một chuyến xe chưa hoàn thành. Vui lòng đợi tài xế hoặc hủy chuyến cũ trước khi đặt chuyến mới!");
-            return; // Dừng, không cho đặt tiếp
+        const phoneSnap = await getDocs(qCheckPhone);
+        if (!phoneSnap.empty) {
+            alert("Số điện thoại này đang có một chuyến xe chưa hoàn thành. Vui lòng đợi tài xế liên hệ!");
+            setTimeout(() => resetButton(btn, originalText), 3000);
+            return;
         }
 
-        // 3. Nếu không có chuyến nào chưa xong, tiến hành đặt xe như bình thường
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
-            customerName: n, 
-            phone: ph, 
-            pickup: pk, 
-            destination: ds || "...",
-            isPrebook: isP, 
-            prebookDate: isP ? pDate : null,
-            prebookTime: isP ? pTime : null,
-            status: 'pending', 
-            createdAt: serverTimestamp()
+        // 6. [LOGIC 2] CHẶN SPAM THEO IP/ID (QUÁ 3 ĐƠN/10 PHÚT)
+        const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const qSpam = query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'bookings'),
+            where('createdAt', '>=', tenMinsAgo)
+        );
+        const spamSnap = await getDocs(qSpam);
+        let count = 0;
+        spamSnap.forEach(doc => {
+            const d = doc.data();
+            if (d.userIP === userIP || d.deviceId === deviceId) count++;
         });
 
-        showToast("Đã gửi yêu cầu gọi xe thành công!", "success");
-        
-        // Reset form
+        if (count >= 10) {
+            alert("Bạn đã đặt quá nhiều lần liên tục với SDT khác nhau.Tạm khóa");
+            setTimeout(() => resetButton(btn, originalText), 3000);
+            return;
+        }
+
+        // 7. GỬI LÊN FIREBASE
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
+            customerName: n,
+            phone: ph,
+            pickup: pk,
+            destination: ds || "...",
+            status: 'pending',
+            isPrebook: isP,
+            prebookDate: isP ? pDate : null,
+            prebookTime: isP ? pTime : null,
+            createdAt: serverTimestamp(),
+            userIP: userIP,
+            deviceId: deviceId 
+        });
+
+        showToast("Đặt xe thành công!", "success");
+	const msg = `
+🚕 <b>ĐƠN XE MỚI</b>
+
+👤 Khách: ${n}
+📞 SĐT: ${ph}
+📍 Đón: ${pk}
+🎯 Đến: ${ds || "..."}
+
+${isP ? `⏰ Hẹn: ${pDate} ${pTime}` : "⚡ Đi ngay"}
+
+🌐 Xem chi tiết: https://xethubon.vercel.app
+`;
+
+sendTelegramMessage(msg);
+
+
+        // 8. RESET FORM & MỞ KHÓA NÚT SAU 3 GIÂY
+        document.getElementById('cust-name').value = '';
+        document.getElementById('cust-phone').value = '';
         document.getElementById('cust-pickup').value = '';
         document.getElementById('cust-dest').value = '';
         
-    } catch (e) { 
-        console.error("Lỗi đặt xe:", e);
-        showToast("Có lỗi xảy ra, vui lòng thử lại!", "error"); 
+        setTimeout(() => resetButton(btn, originalText), 3000);
+
+    } catch (error) {
+        console.error("Lỗi:", error);
+        alert("Có lỗi: " + error.message);
+        resetButton(btn, originalText);
     }
 };
 
+// Hàm phụ để mở khóa nút
+function resetButton(btn, text) {
+    if (btn) {
+        btn.disabled = false;
+        btn.innerText = text;
+        btn.style.backgroundColor = ""; 
+        btn.style.opacity = "1";
+        btn.style.cursor = "pointer";
+    }
+}
+
+async function sendTelegramMessage(text) {
+    const TELEGRAM_BOT_TOKEN = "8710176898:AAEPBUDX1dvvTVkfQiyO1qpBD9exg1hLiK0";
+    const TELEGRAM_GROUP_ID = "-1003887982983";
+
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    try {
+        await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                chat_id: TELEGRAM_GROUP_ID,
+                text: text,
+                parse_mode: "HTML"
+            })
+        });
+    } catch (err) {
+        console.error("Lỗi Telegram:", err);
+    }
+}
+
+
+
+		
+       
+
+
+
+		
         function canAcceptPrebook(dateStr, timeStr) {
             if (!dateStr || !timeStr) return true;
             const target = new Date(`${dateStr}T${timeStr}`);
