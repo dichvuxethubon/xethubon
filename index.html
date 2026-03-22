@@ -122,9 +122,9 @@
                     <input type="time" id="prebook-time" class="w-full px-5 py-3 bg-gray-50 rounded-2xl border">
                 </div>
 
-                <button id="btn-create-booking" onclick="createBooking()" class="w-full py-5 taxi-gradient text-white font-black text-xl rounded-2xl shadow-lg active:scale-95 uppercase">
-                    Xác nhận gọi xe
-                </button>
+                <button id="btn-create-booking" onclick="createBooking(event)" class="w-full py-5 taxi-gradient text-white font-black text-xl rounded-2xl shadow-lg active:scale-95 uppercase">
+    Xác nhận gọi xe
+</button>
             </div>
         </div>
 
@@ -379,14 +379,15 @@
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, addDoc, collection, onSnapshot, serverTimestamp, deleteDoc, updateDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-  apiKey: "AIzaSyAJF1dIS6t6BczBt5oqmXTWsxryDqZ7yNM",
-  authDomain: "xethubon.firebaseapp.com",
-  projectId: "xethubon",
-  storageBucket: "xethubon.firebasestorage.app",
-  messagingSenderId: "1012838676352",
-  appId: "1:1012838676352:web:748dc0c46170aa45dc3365",
-  measurementId: "G-6Z889WEYQ0"
+
+	const firebaseConfig = {
+  apiKey: "AIzaSyB5yAea_XyMYJbH0d7q5PvVIFuFkwuYoic",
+  authDomain: "thubontaxi.firebaseapp.com",
+  projectId: "thubontaxi",
+  storageBucket: "thubontaxi.firebasestorage.app",
+  messagingSenderId: "249965700232",
+  appId: "1:249965700232:web:e88957e1cf29623cbf2b3d",
+  measurementId: "G-8RQ16F86JY"
 };
 
         const app = initializeApp(firebaseConfig);
@@ -607,6 +608,13 @@ sortedDocs.forEach(docSnap => {
             }
         }
 
+	
+	
+
+
+
+
+
 	window.createBooking = async (e) => {
     // 1. Chặn reload trang (Chống vỡ giao diện Mobile)
     if (e && e.preventDefault) e.preventDefault();
@@ -636,7 +644,7 @@ sortedDocs.forEach(docSnap => {
     // 2. Kiểm tra định dạng SĐT (Phải là số, từ 9-11 chữ số)
     const phoneRegex = /^[0-9]{9,11}$/;
     if (!phoneRegex.test(ph)) {
-        showToast("Số điện thoại không phải của bạn!", "error");
+        showToast("Số điện thoại không hợp lệ!", "error");
         return;
     }
 
@@ -669,7 +677,7 @@ sortedDocs.forEach(docSnap => {
             resetButton(btn, originalContent);
             return;
         }
-		if (isP && (!pD || !pT)) {
+	if (isP && (!pD || !pT)) {
         showToast("Vui lòng chọn Ngày và Giờ cho đơn đặt trước!", "error");
         return;
     	}
@@ -737,6 +745,17 @@ function resetButton(btn, originalContent) {
         btn.innerHTML = originalContent;
     }
 }
+
+
+
+
+
+
+
+
+
+
+		
         function canAcceptPrebook(dateStr, timeStr) {
             if (!dateStr || !timeStr) return true;
             const target = new Date(`${dateStr}T${timeStr}`);
